@@ -1,0 +1,32 @@
+{
+  "name": "JSON Resume Exporter",
+  "description": "Export a LinkedIn profile to JSON Resume",
+  "manifest_version": 3,
+  "version": "0.0.0",
+  "icons": {
+    "16": "icon-16.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon-16.png",
+      "48": "icon-48.png"
+    }
+  },
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "linkedin-to-jsonresume@owenmoogk.com",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  }
+}

@@ -15,7 +15,7 @@ Open a LinkedIn profile (`https://www.linkedin.com/in/<someone>/`) while signed 
 The popup also lets you pick:
 
 - **Export language**: for profiles that have multiple language versions
-- **JSON Resume version**: *Stable* (`v1.0.0`, default), *Legacy* (`v0.0.16`), or *Beta* (currently the same as stable)
+- **JSON Resume version**: _Stable_ (`v1.0.0`, default), _Legacy_ (`v0.0.16`), or _Beta_ (currently the same as stable)
 
 The extension reads data through LinkedIn's internal "Voyager" API (the same one linkedin.com uses), using your signed-in session. It exports basics (name, headline, About, location, email, phone, website), work, education, volunteering, certificates, awards, skills, projects, publications, languages, and recommendations.
 
@@ -28,51 +28,79 @@ The extension reads data through LinkedIn's internal "Voyager" API (the same one
 
 ### Build
 
+Requires Node 22+ and [Yarn (classic)](https://classic.yarnpkg.com/).
+
 ```bash
-npm ci
-npm run build
+yarn install
+yarn build
 ```
 
-This creates the unpacked extension in `build-browserext/`. `npm run package` also zips it into `webstore-zips/`.
+This creates the unpacked extension in `dist/`. `yarn package` also zips it into `web-ext-artifacts/`. CI builds the same zip on every push, and attaches it to a GitHub release for `v*` tags.
 
-### Firefox (128+)
+### Firefox (140+)
 
 1. Go to `about:debugging#/runtime/this-firefox`
-2. Click **Load Temporary Add-on…** and pick `build-browserext/manifest.json`
-3. Open a profile and click the toolbar button. If the buttons are greyed out, right-click the icon and choose *Always allow on www.linkedin.com*.
+2. Click **Load Temporary Add-on…** and pick `dist/manifest.json` (or the zip)
+3. Open a profile and click the toolbar button. If the buttons are greyed out, right-click the icon and choose _Always allow on www.linkedin.com_.
 
-Temporary add-ons are removed when Firefox restarts. To install permanently, sign the build with `npx web-ext sign --source-dir build-browserext` (needs a free addons.mozilla.org API key) and install the resulting `.xpi`.
+Temporary add-ons are removed when Firefox restarts. To install permanently, sign the build with `npx web-ext sign --source-dir dist` (needs a free addons.mozilla.org API key) and install the resulting `.xpi`.
 
 ### Chrome / Chromium
 
 1. Go to `chrome://extensions` and turn on **Developer mode**
-2. Click **Load unpacked** and pick the `build-browserext/` folder
+2. Click **Load unpacked** and pick the `dist/` folder
 
 ## Development
 
-- `npm run build:dev`: unminified build with source maps
-- `npm run type-check`: TypeScript check over the JSDoc-typed JS
-- `npx web-ext lint --source-dir build-browserext`: validate the extension for Firefox
+TypeScript + Vite, linted with ESLint (`typescript-eslint` strict type-checked rules) and formatted with Prettier.
+
+| Command                                      | What it does                                     |
+| -------------------------------------------- | ------------------------------------------------ |
+| `yarn build`                                 | Build the extension into `dist/`                 |
+| `yarn package`                               | Build, then zip into `web-ext-artifacts/`        |
+| `yarn lint`                                  | ESLint                                           |
+| `yarn typecheck`                             | `tsc --noEmit`                                   |
+| `yarn test`                                  | `lint` + `typecheck`                             |
+| `yarn lint:ext`                              | Validate `dist/` with Mozilla's `web-ext lint`   |
+| `yarn ver:patch` / `ver:minor` / `ver:major` | Bump version, tag, and push (triggers a release) |
+
+The extension version comes from `package.json` and is written into the built `manifest.json`.
 
 To get debug logging in the page console, add `?li2jr_debug=true` to the profile URL before running the extension.
 
+### Layout
+
+```
+src/
+  manifest.json        extension manifest (version is filled in at build time)
+  popup/               toolbar popup (popup.html / popup.ts / popup.css)
+  content/             exporter injected into the LinkedIn page
+    index.ts           entry point; exposes window.liToJr
+    voyager.ts         authenticated LinkedIn API client + endpoints
+    linkedin.ts        LinkedIn entity types + EntityStore
+    profileData.ts     fetches all profile sections
+    resume.ts          maps LinkedIn data to JSON Resume (stable / legacy)
+    vcard.ts, modal.ts, utils.ts
+  schema/              JSON Resume schema types
+public/                icons (copied as-is)
+```
+
 ### How it works
 
-- `browser-ext/popup.js` injects `main.js` into the page's MAIN world with `scripting.executeScript`, so requests go out with the page's own LinkedIn session, then calls methods on `window.liToJrInstance`.
-- `src/main.js` fetches:
+- The popup injects `exporter.js` into the page's MAIN world with `scripting.executeScript`, so requests go out with the page's own LinkedIn session, then calls methods on `window.liToJr`.
+- The exporter fetches:
   - `identity/dash/profiles?...FullProfileWithEntities`: most sections
   - `identity/dash/profilePositionGroups`: the full, paginated work history
   - `identity/dash/profiles?...ProfileContactInfo`: email, phone, websites
-  - `identity/dash/profileSkills`, `identity/dash/recommendations`
-- It then maps the results to JSON Resume (templates in `src/templates.js`, LinkedIn type mappings in `src/schema.js`).
+  - `identity/dash/recommendations`, and `profileSkills` / `profileVolunteerExperiences` when the profile response truncates them
+- It then maps the results to JSON Resume. The legacy (v0.0.16) format is derived from the stable (v1.0.0) one.
 
 LinkedIn retired the older `/identity/profiles/{id}/profileView`-style endpoints (they return HTTP 410), so only the "dash" endpoints are used.
 
-You can also paste `build/main.js` into the browser console on a profile page and run:
+You can also paste `dist/exporter.js` into the browser console on a profile page and run:
 
 ```js
-li2jr = new LinkedinToResumeJson(true);
-li2jr.parseAndShowOutput();
+await liToJr.showOutput(); // or: await liToJr.getResume('stable')
 ```
 
 ## Disclaimer

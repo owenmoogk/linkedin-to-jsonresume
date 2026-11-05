@@ -1,8 +1,60 @@
 {
-    "printWidth": 200,
-    "useTabs": false,
-    "singleQuote": true,
-    "tabWidth": 4,
-    "endOfLine": "auto",
-    "trailingComma": "none"
+	"arrayBracketNewline": "consistent",
+	"arrayBracketSpacing": "always",
+	"arrayElementNewline": "consistent",
+	"arrowParens": "always",
+	"arrowSpacing": true,
+	"blockSpacing": true,
+	"bracketSpacing": true,
+	"camelcase": false,
+	"commaStyle": "last",
+	"computedPropertySpacing": "never",
+	"curly": "multi-line",
+	"dotLocation": "property",
+	"endOfLine": "lf",
+	"eqeqeq": "always",
+	"functionCallArgumentNewline": "consistent",
+	"functionParenNewline": "multiline-arguments",
+	"implicitArrowLinebreak": "beside",
+	"keySpacing": true,
+	"newParens": true,
+	"objectCurlyNewline": "never",
+	"objectPropertyNewline": {
+		"allowAllPropertiesOnSameLine": true
+	},
+	"oneVar": "never",
+	"paddingLineBetweenStatements": [
+		{
+			"blankLine": "always",
+			"prev": "*",
+			"next": "function"
+		}
+	],
+	"preferConst": true,
+	"singleQuote": true,
+	"preferPromiseRejectErrors": true,
+	"preferRegexLiterals": true,
+	"radix": "always",
+	"semi": true,
+	"trailingComma": "es5",
+	"semiStyle": "last",
+	"sortImports": {
+		"ignoreCase": true,
+		"ignoreDeclarationSort": true,
+		"ignoreMemberSort": false,
+		"memberSyntaxSortOrder": [
+			"none",
+			"all",
+			"multiple",
+			"single"
+		]
+	},
+	"spaceBeforeBlocks": true,
+	"spaceInParens": "always",
+	"spacedComment": "always",
+	"switchColonSpacing": true,
+	"templateCurlySpacing": true,
+	"templateTagSpacing": "always",
+	"wrapIIFE": "inside",
+	"yoda": "never"
 }

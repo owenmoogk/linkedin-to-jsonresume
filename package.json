@@ -1,53 +1,42 @@
 {
-    "name": "linkedin-to-json-resume-exporter",
-    "version": "3.3.0",
-    "description": "Browser extension (Firefox / Chrome) that exports your open LinkedIn profile to JSON Resume",
-    "private": true,
-    "main": "src/main.js",
-    "scripts": {
-        "build": "node ./build-scripts/prep-dirs.js && webpack --config webpack.prod.js && node ./build-scripts/prep-browserext.js",
-        "build:dev": "node ./build-scripts/prep-dirs.js && webpack --config webpack.dev.js && node ./build-scripts/prep-browserext.js",
-        "package": "npm run build && node ./build-scripts/package-browserext.js",
-        "type-check": "tsc --noEmit"
-    },
-    "author": {
-        "name": "Joshua Tzucker",
-        "url": "https://joshuatz.com/?utm_source=package"
-    },
-    "license": "MIT",
-    "devDependencies": {
-        "@babel/cli": "^7.27.2",
-        "@babel/core": "^7.27.4",
-        "@babel/plugin-transform-runtime": "^7.27.4",
-        "@babel/preset-env": "^7.27.2",
-        "@babel/runtime": "^7.27.4",
-        "@types/archiver": "^6.0.3",
-        "@types/chrome": "0.0.326",
-        "@types/fs-extra": "^11.0.4",
-        "archiver": "^7.0.1",
-        "babel-loader": "^10.0.0",
-        "fs-extra": "^11.3.0",
-        "prettier": "^3.5.3",
-        "typescript": "^5.8.3",
-        "webpack": "^5.99.9",
-        "webpack-cli": "^6.0.1"
-    },
-    "babel": {
-        "plugins": [
-            "@babel/transform-runtime"
-        ],
-        "presets": [
-            [
-                "@babel/preset-env",
-                {
-                    "targets": {
-                        "browsers": "defaults"
-                    }
-                }
-            ]
-        ]
-    },
-    "dependencies": {
-        "@dan/vcards": "^2.10.0"
-    }
+  "name": "linkedin-to-jsonresume",
+  "description": "Browser extension (Firefox / Chrome) that exports your open LinkedIn profile to JSON Resume",
+  "private": true,
+  "version": "4.0.0",
+  "type": "module",
+  "license": "MIT",
+  "author": "Owen Moogk (fork of Joshua Tzucker's linkedin-to-jsonresume)",
+  "scripts": {
+    "build": "vite build --mode popup && vite build --mode content",
+    "lint": "eslint .",
+    "lint:ext": "web-ext lint --source-dir dist",
+    "typecheck": "tsc --noEmit",
+    "test": "yarn lint && yarn typecheck",
+    "package": "yarn build && web-ext build --source-dir dist --artifacts-dir web-ext-artifacts --overwrite-dest",
+    "ver:major": "git pull && yarn version --major && git push && git push --tags",
+    "ver:minor": "git pull && yarn version --minor && git push && git push --tags",
+    "ver:patch": "git pull && yarn version --patch && git push && git push --tags"
+  },
+  "dependencies": {
+    "@dan/vcards": "^2.10.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^22",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-prettier": "^5.5.7",
+    "globals": "^17.14.0",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5",
+    "vite-plugin-eslint": "^1.8.1",
+    "web-ext": "^10.8.0"
+  }
 }

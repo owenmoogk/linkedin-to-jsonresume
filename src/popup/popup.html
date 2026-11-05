@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LinkedIn to JSON Resume</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+
+  <body>
+    <div class="fullCenter">
+      <button
+        id="showButton"
+        class="mainButton disabled toggle"
+        title="Export profile to JSON Resume"
+      >
+        LinkedIn Profile to JSON
+      </button>
+      <button
+        id="downloadButton"
+        class="mainButton emojiButton disabled toggle"
+        title="Download JSON Resume Export"
+      >
+        💾
+      </button>
+      <button
+        id="vcardButton"
+        class="mainButton emojiButton disabled toggle"
+        title="Download vCard File"
+      >
+        📠
+      </button>
+    </div>
+    <div class="fullCenter">
+      <label>
+        Select export language:
+        <select id="langSelect" class="langSelect toggle">
+          <option value="en_US">en_US</option>
+        </select>
+      </label>
+    </div>
+    <div class="fullCenter">
+      <label>
+        Select JSONResume version:
+        <select id="specSelect">
+          <option value="legacy">Legacy (v0.0.16)</option>
+          <option value="stable" selected>Stable (v1.0.0)</option>
+          <option value="beta">Currently even with stable (v1.0.0)</option>
+        </select>
+      </label>
+    </div>
+    <div class="fullCenter bottomButtonsWrapper">
+      <a
+        class="bottomButton"
+        href="https://github.com/owenmoogk/linkedin-to-jsonresume"
+        target="_blank"
+        title="Info about the extension. Takes you to Github page."
+      >
+        <div>Info</div>
+      </a>
+      <a
+        class="bottomButton"
+        href="https://github.com/owenmoogk/linkedin-to-jsonresume/issues/new"
+        target="_blank"
+        title="Report an issue or request a feature."
+      >
+        <div>Report Issue</div>
+      </a>
+    </div>
+    <div class="fullCenter">
+      <span id="status" class="status"></span>
+    </div>
+    <div class="fullCenter">
+      <span>Version: </span><span id="versionDisplay"></span>
+    </div>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

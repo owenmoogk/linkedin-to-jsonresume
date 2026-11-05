@@ -1,10 +1,5 @@
-node_modules
-build
-build-bookmarklet
-build-browserext
-webstore-zips
-!build/.gitignore
-scratch
-*.pem
-*.crx
-.DS_Store
+node_modules/
+dist/
+web-ext-artifacts/
+
+.env

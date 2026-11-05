@@ -1,23 +1,21 @@
 {
-    "exclude": [
-        "node_modules",
-        "build",
-        "build-browserext",
-        "webstore-zips",
-        "scratch"
-    ],
-    "compilerOptions": {
-        "baseUrl": ".",
-        "checkJs": true,
-        "noEmit": true,
-        "noImplicitReturns": true,
-        "alwaysStrict": true,
-        "declaration": false,
-        "noImplicitAny": true,
-        "maxNodeModuleJsDepth": 0,
-        "target": "es2015",
-        "moduleResolution": "node",
-        "allowSyntheticDefaultImports": true,
-        "resolveJsonModule": true
-    }
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "moduleResolution": "Bundler",
+    "types": ["chrome", "node", "vite/client"],
+    "strict": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*", "vite.config.ts", "eslint.config.mjs"],
+  "exclude": ["node_modules", "dist"]
 }
