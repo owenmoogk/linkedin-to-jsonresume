@@ -69,6 +69,16 @@ jobs:
     needs: [build, test]
     timeout-minutes: 45
     steps:
+      - name: Check AMO credentials
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::error::Missing AMO_JWT_ISSUER / AMO_JWT_SECRET repository secrets. Create API keys at https://addons.mozilla.org/developers/addon/api/key/ and add them under Settings -> Secrets and variables -> Actions, then re-run this workflow."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -97,15 +107,22 @@ jobs:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
 
+      # Stable-named .xpi + updates.json (Firefox auto-update manifest)
+      - name: Prepare release assets
+        run: node scripts/release-assets.mjs
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
+          make_latest: true
           body: |
-            Automated release for ${{ github.ref_name }}.
+            ## Install
 
-            - **Firefox**: install the signed `.xpi` (drag it into Firefox, or open it from about:addons → ⚙ → Install Add-on From File).
-            - **Chrome**: unzip the `.zip` and use "Load unpacked" on chrome://extensions.
+            **Firefox**: download [`linkedin-to-jsonresume.xpi`](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/linkedin-to-jsonresume.xpi) and open it in Firefox (or drag it into a Firefox window), then click **Add**. It's signed by Mozilla and updates itself automatically.
+
+            **Chrome**: download the `.zip`, unzip it, and use **Load unpacked** on `chrome://extensions` (with Developer mode on).
           files: |
             web-ext-artifacts/*.xpi
             web-ext-artifacts/*.zip
+            web-ext-artifacts/updates.json

@@ -20,6 +20,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "linkedin-to-jsonresume@owenmoogk.com",
+      "update_url": "https://github.com/owenmoogk/linkedin-to-jsonresume/releases/latest/download/updates.json",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": ["none"]

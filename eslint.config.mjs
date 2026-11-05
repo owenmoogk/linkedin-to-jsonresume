@@ -29,6 +29,18 @@ export default [
     ],
   },
 
+  // Node scripts (CI helpers)
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+
   {
     files: ['**/*.ts'],
 

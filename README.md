@@ -26,11 +26,18 @@ The extension reads data through LinkedIn's internal "Voyager" API (the same one
 
 ## Installing
 
-### From a release (Firefox)
+### Firefox (recommended)
 
-Each [GitHub release](https://github.com/owenmoogk/linkedin-to-jsonresume/releases) has a Mozilla-signed `.xpi`. Open it in Firefox (or drag it into the window) to install it permanently.
+1. Download **[linkedin-to-jsonresume.xpi](https://github.com/owenmoogk/linkedin-to-jsonresume/releases/latest/download/linkedin-to-jsonresume.xpi)** (latest release, signed by Mozilla)
+2. Open the file in Firefox (or drag it into a Firefox window) and click **Add**
 
-### Build it yourself
+It's a permanent install, and Firefox updates it automatically when a new release is published.
+
+### Chrome
+
+Download the `.zip` from the [latest release](https://github.com/owenmoogk/linkedin-to-jsonresume/releases/latest), unzip it, then on `chrome://extensions` turn on **Developer mode** and use **Load unpacked** on the unzipped folder.
+
+### Build it yourself (development)
 
 Requires Node 22+ and [Yarn (classic)](https://classic.yarnpkg.com/).
 
@@ -41,7 +48,7 @@ yarn build
 
 This creates the unpacked extension in `dist/`. `yarn package` also zips it into `web-ext-artifacts/`.
 
-### Firefox (140+)
+#### Load in Firefox (140+)
 
 1. Go to `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on…** and pick `dist/manifest.json` (or the zip)
@@ -49,7 +56,7 @@ This creates the unpacked extension in `dist/`. `yarn package` also zips it into
 
 Temporary add-ons are removed when Firefox restarts. For a permanent install, use a release `.xpi`, or sign your own build (see [Releasing](#releasing)).
 
-### Chrome / Chromium
+#### Load in Chrome / Chromium
 
 1. Go to `chrome://extensions` and turn on **Developer mode**
 2. Click **Load unpacked** and pick the `dist/` folder
@@ -77,7 +84,10 @@ The extension version comes from `package.json` and is written into the built `m
 
 1. Builds and zips the extension, and creates a source archive (`git archive`)
 2. Submits it to [addons.mozilla.org](https://addons.mozilla.org) as an **unlisted** (self-distributed) add-on, waits for Mozilla to sign it, and downloads the signed `.xpi`
-3. Creates a GitHub release with the `.xpi` (Firefox) and `.zip` (Chrome)
+3. Runs `scripts/release-assets.mjs`, which copies the `.xpi` to the stable name `linkedin-to-jsonresume.xpi` and writes `updates.json`
+4. Creates a GitHub release with the `.xpi` files, `updates.json`, and the `.zip` (Chrome)
+
+**Auto-updates**: `gecko.update_url` in `src/manifest.json` points at `releases/latest/download/updates.json`, which always lists the newest version and its signed `.xpi`. Firefox checks it periodically and updates installed copies.
 
 This needs two GitHub Actions secrets, from [AMO → Manage API Keys](https://addons.mozilla.org/developers/addon/api/key/): `AMO_JWT_ISSUER` and `AMO_JWT_SECRET`. The first submission creates the add-on on AMO (using the `gecko.id` in `src/manifest.json`, which must not change), so there's no need to upload anything through the website.
 

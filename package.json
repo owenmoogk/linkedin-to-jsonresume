@@ -9,7 +9,7 @@
   "scripts": {
     "build": "vite build --mode popup && vite build --mode content",
     "lint": "eslint .",
-    "lint:ext": "web-ext lint --source-dir dist",
+    "lint:ext": "web-ext lint --source-dir dist --self-hosted",
     "typecheck": "tsc --noEmit",
     "test": "yarn lint && yarn typecheck",
     "package": "yarn build && web-ext build --source-dir dist --artifacts-dir web-ext-artifacts --overwrite-dest",
