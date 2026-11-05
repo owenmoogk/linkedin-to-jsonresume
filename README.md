@@ -36,8 +36,8 @@ There are (or *were*) a few different options for how to use this:
     2. Drag and drop the indicated link in the page to your bookmarks (toolbar)
     3. Navigate to your LinkedIn profile
     4. Click the bookmarklet, and then a modal should pop up with the exported JSON
-- **Unsupported for now**: Chrome Extension
-    - Currently, this is only supported via [sideloading](#chrome-side-loading-instructions), since the extension has not yet been updated to be compatible with Google's manifest v3 requirements. See [Issue #81](https://github.com/joshuatz/linkedin-to-jsonresume/issues/81) for details.
+- **Browser extension (Firefox or Chrome)**: Manifest V3, via [side-loading](#firefox-side-loading-instructions)
+    - The extension now uses LinkedIn's current ("Dash") Voyager API endpoints; the older `/identity/profiles/*` endpoints it used to rely on have been retired by LinkedIn (they return HTTP `410`).
 
 <details>
     <summary><h2 style="display:inline;">Advanced Features (broken until extension fixed)</h2></summary>
@@ -81,6 +81,17 @@ There are several main buttons in the browser extension, with different effects.
  - The LinkedIn display photo (included in vCard) served by LI is a temporary URL, with a fixed expiration date set by LinkedIn. From observations, this is often set months into the future, but could still be problematic for address book clients that don't cache images. To work around this, I'm converting it to a base64 string; this should work with most vCard clients, but also increases the vCard file size considerably.
 
 </details>
+
+### Firefox Side-loading Instructions
+Requires Firefox 128+.
+
+1. Build the extension: `task build:browserext` (or, without `task`: `npm ci && node build-scripts/prep-dirs.js && npx webpack --config webpack.prod.js && node build-scripts/prep-browserext.js`)
+2. Go to `about:debugging#/runtime/this-firefox`
+3. Click **Load Temporary Add-on…** and pick `build-browserext/manifest.json`
+4. Open your profile (`https://www.linkedin.com/in/<you>/`), click the extension's toolbar button, and use one of the export buttons
+    - If Firefox shows the button greyed out / asks for permission, right-click the toolbar icon → *Always allow on www.linkedin.com* (Firefox treats MV3 host permissions as optional)
+
+Temporary add-ons are removed when Firefox restarts. To install permanently, sign the build with `npx web-ext sign` (requires a free addons.mozilla.org API key) and install the resulting `.xpi`.
 
 ### Chrome Side-loading Instructions
 Instead of installing from the Chrome Webstore, you might might want to "side-load" a ZIP build for either local development, or to try out a new release that has not yet made it through the Chrome review process. Here are the instructions for doing so:

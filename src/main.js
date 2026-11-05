@@ -45,12 +45,13 @@ window.LinkedinToResumeJson = (() => {
     const _voyagerEndpoints = {
         following: '/identity/profiles/{profileId}/following',
         followingCompanies: '/identity/profiles/{profileId}/following?count=10&entityType=COMPANY&q=followedEntities',
-        contactInfo: '/identity/profiles/{profileId}/profileContactInfo',
+        // Legacy (non-dash) /identity/profiles/* endpoints were retired by LinkedIn (HTTP 410)
+        contactInfo: '/identity/dash/profiles?q=memberIdentity&memberIdentity={profileId}&decorationId=com.linkedin.voyager.dash.deco.identity.profile.ProfileContactInfo-17',
         basicAboutMe: '/me',
         advancedAboutMe: '/identity/profiles/{profileId}',
         fullProfileView: '/identity/profiles/{profileId}/profileView',
-        fullSkills: '/identity/profiles/{profileId}/skillCategory',
-        recommendations: '/identity/profiles/{profileId}/recommendations',
+        fullSkills: '/identity/dash/profileSkills?q=viewee&profileUrn=urn:li:fsd_profile:{profileUrnId}',
+        recommendations: '/identity/dash/recommendations?q=received&profileUrn=urn:li:fsd_profile:{profileUrnId}&recommendationStatuses=List(VISIBLE)',
         dash: {
             profilePositionGroups: {
                 path: '/identity/dash/profilePositionGroups?q=viewee&profileUrn=urn:li:fsd_profile:{profileUrnId}&decorationId=com.linkedin.voyager.dash.deco.identity.profile.FullProfilePositionGroup-50',
@@ -278,6 +279,39 @@ window.LinkedinToResumeJson = (() => {
     }
 
     /**
+     * Normalize a contact info response (legacy or dash) into a flat object
+     * @param {LiResponse} res
+     * @param {string} profileId
+     * @returns {{emailAddress?: string, phoneNumbers: {number: string, type?: string}[], websites: {url: string, category?: string}[], twitterHandles: {name: string}[], address?: string} | null}
+     */
+    function normalizeContactInfo(res, profileId) {
+        if (!res || typeof res !== 'object') return null;
+        /** @type {any} */
+        let src = res.data;
+        if (Array.isArray(res.included)) {
+            const dashProfile = res.included.find((e) => /identity\.profile\.Profile$/.test(e.$type || '') && (!e.publicIdentifier || e.publicIdentifier === profileId));
+            if (dashProfile) src = dashProfile;
+        }
+        if (!src || typeof src !== 'object') return null;
+        const email = src.emailAddress && typeof src.emailAddress === 'object' ? src.emailAddress.emailAddress : src.emailAddress;
+        return {
+            emailAddress: email || undefined,
+            address: typeof src.address === 'string' ? src.address : undefined,
+            phoneNumbers: (src.phoneNumbers || [])
+                .map((/** @type {any} */ p) => ({
+                    number: p.phoneNumber && typeof p.phoneNumber === 'object' ? p.phoneNumber.number : p.number,
+                    type: p.type
+                }))
+                .filter((/** @type {any} */ p) => !!p.number),
+            websites: (src.websites || []).map((/** @type {any} */ w) => ({
+                url: w.url,
+                category: (w.type && w.type.category) || w.category || ''
+            })),
+            twitterHandles: (src.twitterHandles || []).map((/** @type {any} */ t) => ({ name: t.name || t.handle }))
+        };
+    }
+
+    /**
      * Parse a LI education object and push the parsed education entry to Resume
      * @param {LiEntity} educationObj
      * @param {InternalDb} db
@@ -341,20 +375,17 @@ window.LinkedinToResumeJson = (() => {
     function parseAndPushPosition(positionObj, db) {
         /** @type {ResumeSchemaLegacy['work'][0]} */
         const parsedWork = {
-            company: positionObj.companyName,
+            company: noNullOrUndef(positionObj.companyName).trim(),
             endDate: '',
             highlights: [],
-            position: positionObj.title,
+            position: noNullOrUndef(positionObj.title).trim(),
             startDate: '',
-            summary: positionObj.description,
+            summary: noNullOrUndef(positionObj.description),
             website: companyLiPageFromCompanyUrn(positionObj['companyUrn'], db)
         };
         parseAndAttachResumeDates(parsedWork, positionObj);
-        // Lookup company website
-        if (positionObj.company && positionObj.company['*miniCompany']) {
-            // @TODO - website is not in schema. Use voyager?
-            // let companyInfo = db.data[position.company['*miniCompany']];
-        }
+        // Prefer full geo name (e.g. "Augsburg, Bavaria, Germany") over the short user-entered location
+        const location = getGeoName(positionObj.geoUrn || positionObj['*geo'], db) || positionObj.geoLocationName || positionObj.locationName || '';
 
         // Push to final json
         _outputJsonLegacy.work.push(parsedWork);
@@ -368,9 +399,59 @@ window.LinkedinToResumeJson = (() => {
             highlights: parsedWork.highlights,
             summary: parsedWork.summary,
             url: parsedWork.website,
-            location: positionObj.locationName
+            location
         });
     }
+
+    /**
+     * Lookup the full display name for a geo URN (e.g. "New York, New York, United States")
+     * @param {string | undefined} geoUrn
+     * @param {InternalDb} db
+     * @returns {string}
+     */
+    function getGeoName(geoUrn, db) {
+        if (typeof geoUrn !== 'string') return '';
+        const geo = db.getElementByUrn(geoUrn);
+        return geo && typeof geo.defaultLocalizedName === 'string' ? geo.defaultLocalizedName : '';
+    }
+
+    /**
+     * LinkedIn's API sometimes strips line breaks from long-form text (e.g. the About section),
+     * leaving "sentence one!Sentence two". Try to restore paragraph breaks, preferring the
+     * rendered page text (which still has them), and falling back to a sentence-boundary heuristic.
+     * @param {string} text
+     * @returns {string}
+     */
+    function restoreParagraphBreaks(text) {
+        if (!text || /\n/.test(text)) return text;
+        try {
+            const main = document.querySelector('main');
+            const pageText = main ? /** @type {HTMLElement} */ (main).innerText : '';
+            if (pageText) {
+                // Build a copy of page text without newlines, keeping a map back to original indexes
+                let stripped = '';
+                /** @type {number[]} */
+                const indexMap = [];
+                for (let x = 0; x < pageText.length; x++) {
+                    if (pageText[x] !== '\n') {
+                        stripped += pageText[x];
+                        indexMap.push(x);
+                    }
+                }
+                const foundAt = stripped.indexOf(text);
+                if (foundAt !== -1) {
+                    const startIdx = indexMap[foundAt];
+                    const endIdx = indexMap[foundAt + text.length - 1];
+                    return pageText.slice(startIdx, endIdx + 1).replace(/\n{3,}/g, '\n\n');
+                }
+            }
+        } catch (e) {
+            // ignore, use heuristic
+        }
+        // Heuristic: "word.Next" / "word!I'm" -> paragraph break
+        return text.replace(/([a-z)][.!?])([A-Z](?:[a-z']|\s))/g, '$1\n\n$2');
+    }
+
 
     /**
      * Parse a LI volunteer experience object and push the parsed volunteer entry to Resume
@@ -481,14 +562,17 @@ window.LinkedinToResumeJson = (() => {
                     /** @type {ResumeSchemaLegacy['basics']} */
                     const formattedProfileObj = {
                         name: `${profile.firstName} ${profile.lastName}`,
-                        summary: noNullOrUndef(profile.summary),
+                        summary: restoreParagraphBreaks(noNullOrUndef(profile.summary)),
                         label: noNullOrUndef(profile.headline),
                         location: {
-                            countryCode: localeObject.country
+                            countryCode: (profile.location && profile.location.countryCode) || localeObject.country
                         }
                     };
+                    const geoName = getGeoName(profile.geoLocation && profile.geoLocation.geoUrn, db);
                     if (profile.address) {
                         formattedProfileObj.location.address = noNullOrUndef(profile.address);
+                    } else if (geoName) {
+                        formattedProfileObj.location.address = geoName;
                     } else if (profile.locationName) {
                         formattedProfileObj.location.address = noNullOrUndef(profile.locationName);
                     }
@@ -975,14 +1059,15 @@ window.LinkedinToResumeJson = (() => {
 
     LinkedinToResumeJson.prototype.parseViaInternalApiContactInfo = async function parseViaInternalApiContactInfo() {
         try {
-            const contactInfo = await this.voyagerFetch(_voyagerEndpoints.contactInfo);
-            if (contactInfo && typeof contactInfo.data === 'object') {
-                const { websites, twitterHandles, phoneNumbers, emailAddress } = contactInfo.data;
+            const contactInfoRes = await this.voyagerFetch(_voyagerEndpoints.contactInfo);
+            const contactInfo = normalizeContactInfo(contactInfoRes, this.getProfileId());
+            if (contactInfo) {
+                const { websites, twitterHandles, phoneNumbers, emailAddress } = contactInfo;
                 /** @type {Partial<ResumeSchemaLegacy['basics']>} */
                 const partialBasics = {
                     location: _outputJsonLegacy.basics.location
                 };
-                partialBasics.location.address = noNullOrUndef(contactInfo.data.address, _outputJsonLegacy.basics.location.address);
+                partialBasics.location.address = noNullOrUndef(contactInfo.address, _outputJsonLegacy.basics.location.address);
                 partialBasics.email = noNullOrUndef(emailAddress, _outputJsonLegacy.basics.email);
                 if (phoneNumbers && phoneNumbers.length) {
                     partialBasics.phone = noNullOrUndef(phoneNumbers[0].number);
@@ -996,12 +1081,15 @@ window.LinkedinToResumeJson = (() => {
                     ...partialBasics
                 };
 
-                // Scrape Websites
-                if (Array.isArray(websites)) {
-                    for (let x = 0; x < websites.length; x++) {
-                        if (/portfolio/i.test(websites[x].type.category)) {
-                            _outputJsonLegacy.basics.website = websites[x].url;
-                            _outputJsonStable.basics.url = websites[x].url;
+                // Scrape Websites - prefer portfolio, then personal, then anything
+                if (Array.isArray(websites) && websites.length) {
+                    const preferredOrder = [/portfolio/i, /personal/i, /.*/];
+                    for (const patt of preferredOrder) {
+                        const match = websites.find((w) => patt.test(w.category || ''));
+                        if (match && match.url) {
+                            _outputJsonLegacy.basics.website = match.url;
+                            _outputJsonStable.basics.url = match.url;
+                            break;
                         }
                     }
                 }
@@ -1010,6 +1098,7 @@ window.LinkedinToResumeJson = (() => {
                 if (Array.isArray(twitterHandles)) {
                     twitterHandles.forEach((handleMeta) => {
                         const handle = handleMeta.name;
+                        if (!handle) return;
                         const formattedProfile = {
                             network: 'Twitter',
                             username: handle,
@@ -1085,16 +1174,16 @@ window.LinkedinToResumeJson = (() => {
 
     LinkedinToResumeJson.prototype.parseViaInternalApiRecommendations = async function parseViaInternalApiRecommendations() {
         try {
-            const recommendationJson = await this.voyagerFetch(`${_voyagerEndpoints.recommendations}?q=received&recommendationStatuses=List(VISIBLE)`);
+            const recommendationJson = await this.voyagerFetch(_voyagerEndpoints.recommendations);
             // This endpoint return a LI db
             const db = buildDbFromLiSchema(recommendationJson);
             db.getElementKeys().forEach((key) => {
                 const elem = db.entitiesByUrn[key];
                 if (elem && 'recommendationText' in elem) {
                     // Need to do a secondary lookup to get the name of the person who gave the recommendation
-                    const recommenderElem = db.entitiesByUrn[elem['*recommender']];
+                    const recommenderElem = db.entitiesByUrn[elem['*recommender'] || elem['*recommenderProfile']] || /** @type {LiEntity} */ ({});
                     const formattedReference = {
-                        name: `${recommenderElem.firstName} ${recommenderElem.lastName}`,
+                        name: `${recommenderElem.firstName || ''} ${recommenderElem.lastName || ''}`.trim(),
                         reference: elem.recommendationText
                     };
                     _outputJsonLegacy.references.push(formattedReference);
@@ -1375,19 +1464,15 @@ window.LinkedinToResumeJson = (() => {
 
         // Get directly via API
         /** @type {ParseProfileSchemaResultSummary['profileSrc']} */
-        let endpointType = 'profileView';
+        let endpointType;
         /** @type {LiResponse} */
         let profileResponse;
         /**
          * LI acts strange if user is a multilingual user, with defaultLocale different than the resource being requested. It will *not* respect x-li-lang header for profileView, and you instead have to use the Dash fullprofile endpoint
          */
-        if (!localeMatchesUser || this.preferDash === true) {
-            endpointType = 'dashFullProfileWithEntities';
-            profileResponse = await this.voyagerFetch(_voyagerEndpoints.dash.fullProfile.path);
-        } else {
-            // use normal profileView
-            profileResponse = await this.voyagerFetch(_voyagerEndpoints.fullProfileView);
-        }
+        // Note: The legacy `profileView` endpoint has been retired (HTTP 410), so Dash is always used now
+        endpointType = 'dashFullProfileWithEntities';
+        profileResponse = await this.voyagerFetch(_voyagerEndpoints.dash.fullProfile.path);
 
         // Try to use the same parser that I use for embedded
         const profileParserResult = await parseProfileSchemaJSON(this, profileResponse, endpointType);
@@ -1716,39 +1801,51 @@ window.LinkedinToResumeJson = (() => {
      * @returns {Promise<string>} profile URN ID
      */
     LinkedinToResumeJson.prototype.getProfileUrnId = async function getProfileUrnId(allowFetch = true) {
-        const profileViewUrnPatt = /urn:li:fs_profileView:(.+)$/i;
+        // Dash profile URNs look like `urn:li:fsd_profile:ACoAAD...`
+        const profileUrnPatt = /urn:li:(?:fsd_profile|fs_profileView|fs_profile|fs_miniProfile):([A-Za-z0-9_-]+)/i;
 
         if (this.profileUrnId && this.scannedPageUrl === this.getUrlWithoutQuery()) {
             return this.profileUrnId;
         }
 
+        /**
+         * @param {LiResponse} liResponse
+         * @returns {string | null}
+         */
+        const extractFromDashProfileRes = (liResponse) => {
+            const profileId = this.getProfileId();
+            const profileObj = (liResponse.included || []).find(
+                (e) => e.$type === 'com.linkedin.voyager.dash.identity.profile.Profile' && (!e.publicIdentifier || e.publicIdentifier === profileId)
+            );
+            const match = profileObj && typeof profileObj.entityUrn === 'string' ? profileObj.entityUrn.match(profileUrnPatt) : null;
+            return match ? match[1] : null;
+        };
+
         // Try to use cache
         if (this.profileParseSummary && this.profileParseSummary.parseSuccess) {
-            const profileDb = buildDbFromLiSchema(this.profileParseSummary.liResponse);
-            this.profileUrnId = profileDb.tableOfContents['entityUrn'].match(profileViewUrnPatt)[1];
-            return this.profileUrnId;
+            const cached = extractFromDashProfileRes(this.profileParseSummary.liResponse);
+            if (cached) {
+                this.profileUrnId = cached;
+                return this.profileUrnId;
+            }
         }
 
-        const endpoint = _voyagerEndpoints.fullProfileView;
-        // Make a new API call to get ID - be wary of recursive calls
+        // Make a new API call to get ID (endpoint must not itself require the URN, to avoid recursion)
+        const endpoint = _voyagerEndpoints.dash.fullProfile.path;
         if (allowFetch && !endpoint.includes(`{profileUrnId}`)) {
-            const fullProfileView = await this.voyagerFetch(endpoint);
-            const profileDb = buildDbFromLiSchema(fullProfileView);
-            this.profileUrnId = profileDb.tableOfContents['entityUrn'].match(profileViewUrnPatt)[1];
-            return this.profileUrnId;
+            const fullProfile = await this.voyagerFetch(endpoint);
+            const fetched = extractFromDashProfileRes(fullProfile);
+            if (fetched) {
+                this.profileUrnId = fetched;
+                return this.profileUrnId;
+            }
         }
-        this.debugConsole.warn('Could not scrape profileUrnId from cache, but fetch is disallowed. Might be using a stale ID!');
 
         // Try to find in DOM, as last resort
-        const urnPatt = /miniprofiles\/([A-Za-z0-9-_]+)/g;
-        const matches = document.body.innerHTML.match(urnPatt);
-        if (matches && matches.length > 1) {
-            // eslint-disable-next-line prettier/prettier
-            // prettier-ignore
-            this.profileUrnId = (urnPatt.exec(matches[matches.length - 1]))[1];
-            return this.profileUrnId;
+        const domMatch = document.body.innerHTML.match(/urn:li:fsd_profile:([A-Za-z0-9_-]+)/);
+        if (domMatch) {
+            this.profileUrnId = domMatch[1];
         }
-
         return this.profileUrnId;
     };
 
@@ -1792,15 +1889,13 @@ window.LinkedinToResumeJson = (() => {
     LinkedinToResumeJson.prototype.exportVCard = async function exportVCard(profileResult, contactInfoObj) {
         const vCard = VCardsJS();
         const profileDb = buildDbFromLiSchema(profileResult.liResponse);
-        const contactDb = buildDbFromLiSchema(contactInfoObj);
-        // Contact info is stored directly in response; no lookup
-        const contactInfo = /** @type {LiProfileContactInfoResponse['data']} */ (contactDb.tableOfContents);
+        const contactInfo = normalizeContactInfo(contactInfoObj, this.getProfileId()) || { phoneNumbers: [], websites: [], twitterHandles: [] };
         const profile = profileResult.profileInfoObj;
         vCard.formattedName = `${profile.firstName} ${profile.lastName}`;
         vCard.firstName = profile.firstName;
         vCard.lastName = profile.lastName;
         // Geo
-        if ('postalCode' in profile.geoLocation) {
+        if (profile.geoLocation && 'postalCode' in profile.geoLocation) {
             // @ts-ignore
             vCard.homeAddress.postalCode = profile.geoLocation.postalCode;
         }
@@ -1821,6 +1916,7 @@ window.LinkedinToResumeJson = (() => {
             });
         }
         // At a minimum, we need month and day in order to include BDAY
+        if (!profile.birthDate && profile.birthDateOn) profile.birthDate = profile.birthDateOn;
         if (profile.birthDate && 'day' in profile.birthDate && 'month' in profile.birthDate) {
             const birthdayLi = /** @type {LiDate} */ (profile.birthDate);
             if (!birthdayLi.year) {

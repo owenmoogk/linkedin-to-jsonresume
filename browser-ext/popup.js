@@ -1,10 +1,15 @@
 /**
- * =============================
- * =        Constants          =
- * =============================
+ * Popup script (Manifest V3, works in Firefox and Chrome).
+ *
+ * The exporter (`main.js`) is injected into the page's MAIN world so that it shares
+ * the page's origin, cookies and globals (needed for authenticated LinkedIn requests
+ * and for the in-page modal). All calls go through `chrome.scripting.executeScript`
+ * with `func` + `args`, since MV3 no longer allows injecting code strings.
  */
 
-const extensionId = chrome.runtime.id;
+/** @type {typeof chrome} */
+// @ts-ignore
+const ext = globalThis.browser || globalThis.chrome;
 
 const STORAGE_KEYS = {
     schemaVersion: 'schemaVersion'
@@ -14,55 +19,67 @@ const SPEC_SELECT = /** @type {HTMLSelectElement} */ (document.getElementById('s
 const SPEC_OPTIONS = ['legacy', 'stable', 'beta'];
 /** @type {HTMLSelectElement} */
 const LANG_SELECT = document.querySelector('.langSelect');
+const STATUS = document.getElementById('status');
+
+/** @type {number | null} */
+let tabId = null;
+
+/** @param {string} msg */
+const setStatus = (msg) => {
+    STATUS.textContent = msg;
+};
 
 /**
- * Generate injectable code for capturing a value from the contentScript scope and passing back via message
- * @param {string} valueToCapture - Name of the scoped variable to capture
- * @param {string} [optKey] - Key to use as message identifier. Defaults to valueToCapture
+ * Run a function inside the page (MAIN world), with access to the exporter instance
+ * Note: `fn` is serialized, so it cannot close over anything from this file - use args.
+ * @template T
+ * @param {(...args: any[]) => T} fn
+ * @param {any[]} [args]
+ * @returns {Promise<Awaited<T>>}
  */
-const createMessageSenderInjectable = (valueToCapture, optKey) => {
-    return `chrome.runtime.sendMessage('${extensionId}', {
-        key: '${optKey || valueToCapture}',
-        value: ${valueToCapture}
-    });`;
-};
-const createMainInstanceCode = `
-isDebug = window.location.href.includes('li2jr_debug=true');
-window.LinkedinToResumeJson = isDebug ? LinkedinToResumeJson : window.LinkedinToResumeJson;
-// Reuse existing instance if possible
-liToJrInstance = typeof(liToJrInstance) !== 'undefined' ? liToJrInstance : new LinkedinToResumeJson(isDebug);
-`;
-const getLangStringsCode = `(async () => {
-    const supported = await liToJrInstance.getSupportedLocales();
-    const user = liToJrInstance.getViewersLocalLang();
-    const payload = {
-        supported,
-        user
+const runInPage = async (fn, args = []) => {
+    const results = await ext.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        func: fn,
+        args
+    });
+    /** @type {any} */
+    const first = results && results[0];
+    if (first && first.error) {
+        throw first.error;
     }
-    ${createMessageSenderInjectable('payload', 'locales')}
-})();
-`;
-
-/**
- * Get the currently selected lang locale in the selector
- */
-const getSelectedLang = () => {
-    return LANG_SELECT.value;
+    return first ? first.result : undefined;
 };
 
 /**
- * Get JS string that can be eval'ed to get the program to run and show output
- * Note: Be careful of strings versus vars, escaping, etc.
- * @param {SchemaVersion} version
+ * Ensure exporter is loaded and an instance exists on the page
  */
-const getRunAndShowCode = (version) => {
-    return `liToJrInstance.preferLocale = '${getSelectedLang()}';liToJrInstance.parseAndShowOutput('${version}');`;
+const ensureInstance = async () => {
+    // @ts-ignore
+    const hasClass = await runInPage(() => typeof window.LinkedinToResumeJson === 'function');
+    if (!hasClass) {
+        await ext.scripting.executeScript({
+            target: { tabId },
+            world: 'MAIN',
+            files: ['main.js']
+        });
+    }
+    await runInPage(() => {
+        const isDebug = window.location.href.includes('li2jr_debug=true');
+        // Re-create instance if profile changed (LinkedIn is an SPA)
+        // @ts-ignore
+        const existing = window.liToJrInstance;
+        if (!existing || existing.profileId !== existing.getProfileId()) {
+            // @ts-ignore
+            window.liToJrInstance = new window.LinkedinToResumeJson(isDebug);
+        }
+    });
 };
 
-/**
- * Toggle enabled state of popup
- * @param {boolean} isEnabled
- */
+const getSelectedLang = () => LANG_SELECT.value;
+
+/** @param {boolean} isEnabled */
 const toggleEnabled = (isEnabled) => {
     document.querySelectorAll('.toggle').forEach((elem) => {
         elem.classList.remove(isEnabled ? 'disabled' : 'enabled');
@@ -70,10 +87,7 @@ const toggleEnabled = (isEnabled) => {
     });
 };
 
-/**
- * Load list of language strings to be displayed as options
- * @param {string[]} langs
- */
+/** @param {string[]} langs */
 const loadLangs = (langs) => {
     LANG_SELECT.innerHTML = '';
     langs.forEach((lang) => {
@@ -82,62 +96,44 @@ const loadLangs = (langs) => {
         option.innerText = lang;
         LANG_SELECT.appendChild(option);
     });
-    toggleEnabled(langs.length > 0);
-};
-
-const exportVCard = () => {
-    chrome.tabs.executeScript({
-        code: `liToJrInstance.generateVCard()`
-    });
-};
-
-/**
- * Set the desired export lang on the exporter instance
- * - Use `null` to unset
- * @param {string | null} lang
- */
-const setLang = (lang) => {
-    chrome.tabs.executeScript(
-        {
-            code: `liToJrInstance.preferLocale = '${lang}';`
-        },
-        () => {
-            chrome.tabs.executeScript({
-                code: `console.log(liToJrInstance);console.log(liToJrInstance.preferLocale);`
-            });
-        }
-    );
 };
 
 /** @param {SchemaVersion} version */
 const setSpecVersion = (version) => {
-    chrome.storage.sync.set({
-        [STORAGE_KEYS.schemaVersion]: version
-    });
+    ext.storage.local.set({ [STORAGE_KEYS.schemaVersion]: version });
+};
+
+/** @returns {Promise<SchemaVersion>} */
+const getSpecVersion = async () => {
+    const fallbackVersion = /** @type {SchemaVersion} */ (SPEC_SELECT.value);
+    try {
+        const result = await ext.storage.local.get([STORAGE_KEYS.schemaVersion]);
+        const stored = result[STORAGE_KEYS.schemaVersion] || '';
+        return SPEC_OPTIONS.includes(stored) ? stored : fallbackVersion;
+    } catch (err) {
+        console.error(err);
+        return fallbackVersion;
+    }
 };
 
 /**
- * Get user's preference for JSONResume Spec Version
- * @returns {Promise<SchemaVersion>}
+ * Wrap a button action with status + error reporting
+ * @param {() => Promise<void>} action
+ * @param {boolean} [closeAfter]
  */
-const getSpecVersion = () => {
-    // Fallback value will be what is already selected in dropdown
-    const fallbackVersion = /** @type {SchemaVersion} */ (SPEC_SELECT.value);
-    return new Promise((res) => {
-        try {
-            chrome.storage.sync.get([STORAGE_KEYS.schemaVersion], (result) => {
-                const storedSetting = result[STORAGE_KEYS.schemaVersion] || '';
-                if (SPEC_OPTIONS.includes(storedSetting)) {
-                    res(storedSetting);
-                } else {
-                    res(fallbackVersion);
-                }
-            });
-        } catch (err) {
-            console.error(err);
-            res(fallbackVersion);
+const handleAction = (action, closeAfter = false) => async () => {
+    setStatus('Working… (this can take a few seconds)');
+    try {
+        await ensureInstance();
+        await action();
+        setStatus('');
+        if (closeAfter) {
+            window.close();
         }
-    });
+    } catch (err) {
+        console.error(err);
+        setStatus(`Error: ${err && err.message ? err.message : err}`);
+    }
 };
 
 /**
@@ -146,48 +142,55 @@ const getSpecVersion = () => {
  * =============================
  */
 
-chrome.runtime.onMessage.addListener((message, sender) => {
-    console.log(message);
-    if (sender.id === extensionId && message.key === 'locales') {
-        /** @type {{supported: string[], user: string}} */
-        const { supported, user } = message.value;
-        // Make sure user's own locale comes as first option
-        if (supported.includes(user)) {
-            supported.splice(supported.indexOf(user), 1);
-        }
-        supported.unshift(user);
-        loadLangs(supported);
-    }
-});
+document.getElementById('liToJsonButton').addEventListener(
+    'click',
+    handleAction(async () => {
+        const version = await getSpecVersion();
+        await runInPage(
+            async (lang, v) => {
+                // @ts-ignore
+                const inst = window.liToJrInstance;
+                inst.preferLocale = lang || null;
+                await inst.parseAndShowOutput(v);
+            },
+            [getSelectedLang(), version]
+        );
+    }, true)
+);
 
-document.getElementById('liToJsonButton').addEventListener('click', async () => {
-    const versionOption = await getSpecVersion();
-    const runAndShowCode = getRunAndShowCode(versionOption);
-    chrome.tabs.executeScript(
-        {
-            code: `${runAndShowCode}`
-        },
-        () => {
-            setTimeout(() => {
-                // Close popup
-                window.close();
-            }, 700);
-        }
-    );
-});
+document.getElementById('liToJsonDownloadButton').addEventListener(
+    'click',
+    handleAction(async () => {
+        const version = await getSpecVersion();
+        await runInPage(
+            async (lang, v) => {
+                // @ts-ignore
+                const inst = window.liToJrInstance;
+                inst.preferLocale = lang || null;
+                await inst.parseAndDownload(v);
+            },
+            [getSelectedLang(), version]
+        );
+    })
+);
 
-document.getElementById('liToJsonDownloadButton').addEventListener('click', () => {
-    chrome.tabs.executeScript({
-        code: `liToJrInstance.preferLocale = '${getSelectedLang()}';liToJrInstance.parseAndDownload();`
-    });
-});
+document.getElementById('vcardExportButton').addEventListener(
+    'click',
+    handleAction(async () => {
+        // @ts-ignore
+        await runInPage(async () => window.liToJrInstance.generateVCard());
+    })
+);
 
 LANG_SELECT.addEventListener('change', () => {
-    setLang(getSelectedLang());
-});
-
-document.getElementById('vcardExportButton').addEventListener('click', () => {
-    exportVCard();
+    const lang = getSelectedLang();
+    runInPage(
+        (l) => {
+            // @ts-ignore
+            window.liToJrInstance.preferLocale = l;
+        },
+        [lang]
+    ).catch(console.error);
 });
 
 SPEC_SELECT.addEventListener('change', () => {
@@ -199,19 +202,40 @@ SPEC_SELECT.addEventListener('change', () => {
  * =           Init            =
  * =============================
  */
-document.getElementById('versionDisplay').innerText = chrome.runtime.getManifest().version;
-
-chrome.tabs.executeScript(
-    {
-        file: 'main.js'
-    },
-    () => {
-        chrome.tabs.executeScript({
-            code: `${createMainInstanceCode}${getLangStringsCode}`
-        });
-    }
-);
+document.getElementById('versionDisplay').innerText = ext.runtime.getManifest().version;
 
 getSpecVersion().then((spec) => {
     SPEC_SELECT.value = spec;
 });
+
+(async () => {
+    const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.url || !/^https:\/\/www\.linkedin\.com\/in\//.test(tab.url)) {
+        toggleEnabled(false);
+        setStatus('Open a LinkedIn profile page (linkedin.com/in/…) to use this.');
+        return;
+    }
+    tabId = tab.id;
+    toggleEnabled(true);
+    try {
+        await ensureInstance();
+        /** @type {{supported: string[], user: string}} */
+        const { supported, user } = await runInPage(async () => {
+            // @ts-ignore
+            const inst = window.liToJrInstance;
+            let supportedLocales = [];
+            try {
+                supportedLocales = await inst.getSupportedLocales();
+            } catch (e) {
+                console.warn('Could not get supported locales', e);
+            }
+            return { supported: supportedLocales, user: inst.getViewersLocalLang() };
+        });
+        const langs = supported.filter((l) => l !== user);
+        langs.unshift(user);
+        loadLangs(langs);
+    } catch (err) {
+        console.error(err);
+        setStatus(`Error loading exporter: ${err && err.message ? err.message : err}`);
+    }
+})();
