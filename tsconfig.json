@@ -2,7 +2,6 @@
     "exclude": [
         "node_modules",
         "build",
-        "build-bookmarklet",
         "build-browserext",
         "webstore-zips",
         "scratch"

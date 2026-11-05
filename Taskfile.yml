@@ -41,12 +41,9 @@ tasks:
   #============================================================#
   #================= Running / Building =======================#
   #============================================================#
-  build:bookmarklet:
-    deps: [build:webpack]
-    cmd: node ./build-scripts/build-bookmarklet.js
   build:browserext:
     deps: [build:webpack]
     cmd: node ./build-scripts/prep-browserext.js
   package:browserext:
     deps: [build:browserext]
-    cmd: ./build-scripts/package-browserext.js
+    cmd: node ./build-scripts/package-browserext.js

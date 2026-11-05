@@ -1,13 +1,13 @@
 {
     "name": "linkedin-to-json-resume-exporter",
     "version": "3.3.0",
-    "description": "Browser tool to grab details from your open LinkedIn profile page and export to JSON Resume Schema",
+    "description": "Browser extension (Firefox / Chrome) that exports your open LinkedIn profile to JSON Resume",
     "private": true,
     "main": "src/main.js",
     "scripts": {
-        "test": "\"Error: no test specified\" && exit 1",
-        "lint": "eslint \"**/*.{js,ts}\"",
-        "lint:fix": "eslint \"**/*.{js,ts}\" --fix",
+        "build": "node ./build-scripts/prep-dirs.js && webpack --config webpack.prod.js && node ./build-scripts/prep-browserext.js",
+        "build:dev": "node ./build-scripts/prep-dirs.js && webpack --config webpack.dev.js && node ./build-scripts/prep-browserext.js",
+        "package": "npm run build && node ./build-scripts/package-browserext.js",
         "type-check": "tsc --noEmit"
     },
     "author": {
@@ -24,19 +24,10 @@
         "@types/archiver": "^6.0.3",
         "@types/chrome": "0.0.326",
         "@types/fs-extra": "^11.0.4",
-        "@typescript-eslint/eslint-plugin": "^8.33.0",
-        "@typescript-eslint/parser": "^8.33.0",
         "archiver": "^7.0.1",
         "babel-loader": "^10.0.0",
-        "bookmarklet": "",
-        "eslint": "^9.28.0",
-        "eslint-config-prettier": "^10.1.5",
-        "eslint-import-resolver-typescript": "^4.4.2",
-        "eslint-plugin-import": "^2.31.0",
-        "eslint-plugin-prettier": "^5.4.1",
         "fs-extra": "^11.3.0",
         "prettier": "^3.5.3",
-        "replace": "^1.2.2",
         "typescript": "^5.8.3",
         "webpack": "^5.99.9",
         "webpack-cli": "^6.0.1"

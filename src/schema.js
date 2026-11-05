@@ -1,20 +1,4 @@
 /**
- * Lookup keys for the standard profileView object
- */
-export const liSchemaKeys = {
-    profile: '*profile',
-    certificates: '*certificationView',
-    education: '*educationView',
-    workPositions: '*positionView',
-    workPositionGroups: '*positionGroupView',
-    skills: '*skillView',
-    projects: '*projectView',
-    attachments: '*summaryTreasuryMedias',
-    volunteerWork: '*volunteerExperienceView',
-    awards: '*honorView',
-    publications: '*publicationView'
-};
-/**
  * Try to maintain a mapping between generic section types, and LI's schema
  *  - tocKeys are pointers that often point to a collection of URNs
  *  - Try to put dash strings last, profileView first

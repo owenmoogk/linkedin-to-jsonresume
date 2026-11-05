@@ -140,7 +140,7 @@ declare global {
     interface ParseProfileSchemaResultSummary {
         liResponse: LiResponse;
         profileInfoObj?: LiEntity;
-        profileSrc: 'profileView' | 'dashFullProfileWithEntities';
+        profileSrc: 'dashFullProfileWithEntities';
         pageUrl: string;
         localeStr?: string;
         parseSuccess: boolean;
