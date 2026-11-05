@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "yarn lint && yarn typecheck",
     "package": "yarn build && web-ext build --source-dir dist --artifacts-dir web-ext-artifacts --overwrite-dest",
+    "sign": "web-ext sign --source-dir dist --channel unlisted --artifacts-dir web-ext-artifacts",
     "ver:major": "git pull && yarn version --major && git push && git push --tags",
     "ver:minor": "git pull && yarn version --minor && git push && git push --tags",
     "ver:patch": "git pull && yarn version --patch && git push && git push --tags"

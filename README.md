@@ -24,9 +24,13 @@ The extension reads data through LinkedIn's internal "Voyager" API (the same one
 - Work locations use the text saved on each position, so some may be short ("Waterloo, ON") and others long ("Waterloo, Ontario, Canada"). LinkedIn's API doesn't return the full place names for positions.
 - LinkedIn's API strips line breaks from the About section. The extension restores them from the rendered page when it can, and otherwise guesses at sentence boundaries.
 
-## Installing (side-loading)
+## Installing
 
-### Build
+### From a release (Firefox)
+
+Each [GitHub release](https://github.com/owenmoogk/linkedin-to-jsonresume/releases) has a Mozilla-signed `.xpi`. Open it in Firefox (or drag it into the window) to install it permanently.
+
+### Build it yourself
 
 Requires Node 22+ and [Yarn (classic)](https://classic.yarnpkg.com/).
 
@@ -35,7 +39,7 @@ yarn install
 yarn build
 ```
 
-This creates the unpacked extension in `dist/`. `yarn package` also zips it into `web-ext-artifacts/`. CI builds the same zip on every push, and attaches it to a GitHub release for `v*` tags.
+This creates the unpacked extension in `dist/`. `yarn package` also zips it into `web-ext-artifacts/`.
 
 ### Firefox (140+)
 
@@ -43,7 +47,7 @@ This creates the unpacked extension in `dist/`. `yarn package` also zips it into
 2. Click **Load Temporary Add-on…** and pick `dist/manifest.json` (or the zip)
 3. Open a profile and click the toolbar button. If the buttons are greyed out, right-click the icon and choose _Always allow on www.linkedin.com_.
 
-Temporary add-ons are removed when Firefox restarts. To install permanently, sign the build with `npx web-ext sign --source-dir dist` (needs a free addons.mozilla.org API key) and install the resulting `.xpi`.
+Temporary add-ons are removed when Firefox restarts. For a permanent install, use a release `.xpi`, or sign your own build (see [Releasing](#releasing)).
 
 ### Chrome / Chromium
 
@@ -62,9 +66,26 @@ TypeScript + Vite, linted with ESLint (`typescript-eslint` strict type-checked r
 | `yarn typecheck`                             | `tsc --noEmit`                                   |
 | `yarn test`                                  | `lint` + `typecheck`                             |
 | `yarn lint:ext`                              | Validate `dist/` with Mozilla's `web-ext lint`   |
+| `yarn sign`                                  | Sign `dist/` with Mozilla (see below)            |
 | `yarn ver:patch` / `ver:minor` / `ver:major` | Bump version, tag, and push (triggers a release) |
 
 The extension version comes from `package.json` and is written into the built `manifest.json`.
+
+### Releasing
+
+`yarn ver:patch` (or `ver:minor` / `ver:major`) bumps the version in `package.json`, tags it, and pushes. For `v*` tags, CI then:
+
+1. Builds and zips the extension, and creates a source archive (`git archive`)
+2. Submits it to [addons.mozilla.org](https://addons.mozilla.org) as an **unlisted** (self-distributed) add-on, waits for Mozilla to sign it, and downloads the signed `.xpi`
+3. Creates a GitHub release with the `.xpi` (Firefox) and `.zip` (Chrome)
+
+This needs two GitHub Actions secrets, from [AMO → Manage API Keys](https://addons.mozilla.org/developers/addon/api/key/): `AMO_JWT_ISSUER` and `AMO_JWT_SECRET`. The first submission creates the add-on on AMO (using the `gecko.id` in `src/manifest.json`, which must not change), so there's no need to upload anything through the website.
+
+AMO rejects a version number it has already seen, so every release needs a new version.
+
+To sign locally instead: `WEB_EXT_API_KEY=<issuer> WEB_EXT_API_SECRET=<secret> yarn sign` after `yarn build`.
+
+### Debugging
 
 To get debug logging in the page console, add `?li2jr_debug=true` to the profile URL before running the extension.
 
