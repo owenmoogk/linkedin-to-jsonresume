@@ -2,7 +2,7 @@
   "name": "linkedin-to-jsonresume",
   "description": "Browser extension (Firefox / Chrome) that exports your open LinkedIn profile to JSON Resume",
   "private": true,
-  "version": "4.0.1",
+  "version": "4.0.2",
   "type": "module",
   "license": "MIT",
   "author": "Owen Moogk (fork of Joshua Tzucker's linkedin-to-jsonresume)",
