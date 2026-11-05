@@ -1,19 +1,15 @@
 /**
  * Prepares release assets after `web-ext sign` (run in CI for `v*` tags):
- *  - `linkedin-to-jsonresume.xpi`: copy of the signed .xpi with a stable name,
- *    so `releases/latest/download/linkedin-to-jsonresume.xpi` always works
+ *  - `linkedin-to-jsonresume.xpi`: the signed .xpi, renamed from AMO's
+ *    hash-prefixed filename, so `releases/latest/download/linkedin-to-jsonresume.xpi`
+ *    always works
  *  - `updates.json`: Firefox update manifest for self-distributed add-ons
  *    (see `gecko.update_url` in src/manifest.json)
  *
  * @see https://extensionworkshop.com/documentation/manage/updating-your-extension/
  */
 import { createHash } from 'node:crypto';
-import {
-  copyFileSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from 'node:fs';
+import { readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ARTIFACTS_DIR = 'web-ext-artifacts';
@@ -45,7 +41,7 @@ if (!signedXpi) {
 const xpiPath = join(ARTIFACTS_DIR, signedXpi);
 const hash = createHash('sha256').update(readFileSync(xpiPath)).digest('hex');
 
-copyFileSync(xpiPath, join(ARTIFACTS_DIR, STABLE_XPI_NAME));
+renameSync(xpiPath, join(ARTIFACTS_DIR, STABLE_XPI_NAME));
 
 const updates = {
   addons: {
@@ -53,7 +49,8 @@ const updates = {
       updates: [
         {
           version,
-          update_link: `https://github.com/${repo}/releases/download/${tag}/${signedXpi}`,
+          // Per-version URL (not `latest`), so the link and hash always match
+          update_link: `https://github.com/${repo}/releases/download/${tag}/${STABLE_XPI_NAME}`,
           update_hash: `sha256:${hash}`,
         },
       ],

@@ -107,7 +107,7 @@ jobs:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
 
-      # Stable-named .xpi + updates.json (Firefox auto-update manifest)
+      # Renames the signed .xpi to a stable name + writes updates.json (Firefox auto-update manifest)
       - name: Prepare release assets
         run: node scripts/release-assets.mjs
 
@@ -123,6 +123,6 @@ jobs:
 
             **Chrome**: download the `.zip`, unzip it, and use **Load unpacked** on `chrome://extensions` (with Developer mode on).
           files: |
-            web-ext-artifacts/*.xpi
+            web-ext-artifacts/linkedin-to-jsonresume.xpi
             web-ext-artifacts/*.zip
             web-ext-artifacts/updates.json
